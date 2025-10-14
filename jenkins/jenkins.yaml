@@ -1,0 +1,43 @@
+jenkins:
+  systemMessage: "Jenkins configurado automáticamente con JCasC"
+  numExecutors: 2
+  scmCheckoutRetryCount: 2
+  mode: NORMAL
+  labelString: "master"
+
+unclassified:
+  location:
+    url: "http://localhost:8083/"
+  sonarglobalconfiguration:
+    installations:
+      - name: "SonarQube-Server"
+        serverUrl: "http://sonarqube:9000"
+        credentialsId: "sonar-token"
+
+tool:
+  maven:
+    installations:
+      - name: "Maven-3.9"
+        properties:
+          - installSource:
+              installers:
+                - maven:
+                    id: "3.9.6"
+  jdk:
+    installations:
+      - name: "jdk21"
+        properties:
+          - installSource:
+              installers:
+                - adoptOpenJdkInstaller:
+                    id: "jdk-21.0.8+9"
+
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - string:
+              scope: GLOBAL
+              id: "sonar-token"
+              description: "Token para SonarQube"
+              secret: "admin123456789"
