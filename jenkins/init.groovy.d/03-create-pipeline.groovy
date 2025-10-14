@@ -24,7 +24,7 @@ pipeline {
     agent any
 
     parameters {
-        string(name: 'SERVICE_REPO_URL', defaultValue: 'https://github.com/Tourment0412/jwtmanual-taller1-micro.git', description: 'Repo del microservicio a construir')
+        string(name: 'SERVICE_REPO_URL', defaultValue: 'https://github.com/MiguelA05/jwtmanual-taller1-micro.git', description: 'Repo del microservicio con infraestructura completa')
         string(name: 'SERVICE_BRANCH', defaultValue: 'main', description: 'Rama del microservicio')
         string(name: 'AUTOMATION_TESTS_REPO_URL', defaultValue: 'https://github.com/MiguelA05/automation-tests.git', description: 'Repo de tests de automatización')
         string(name: 'AUTOMATION_TESTS_BRANCH', defaultValue: 'main', description: 'Rama de tests de automatización')
@@ -96,11 +96,11 @@ pipeline {
         stage('E2E (automation-tests)') {
             steps {
                 script {
-                    // Ejecutar tests E2E usando script del host
-                    sh "echo 'Ejecutando tests E2E usando script del host...'"
+                    // Ejecutar tests E2E usando script del repositorio principal
+                    sh "echo 'Ejecutando tests E2E usando script del repositorio principal...'"
                     
                     // Ejecutar script que maneja la ejecución de tests
-                    sh "/home/miguel/Documentos/GitHub/notifications-service-micro/run-e2e-tests.sh"
+                    sh "service/run-e2e-tests.sh"
                     
                     // Copiar reportes desde directorio temporal
                     sh "cp -r /tmp/jenkins-e2e-reports/allure-reports ./e2e-reports || echo 'Reportes Allure no disponibles'"
