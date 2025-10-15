@@ -10,7 +10,7 @@ unclassified:
     url: "http://localhost:8083/"
   sonarglobalconfiguration:
     installations:
-      - name: "SonarQube-Server"
+      - name: "SonarQube"
         serverUrl: "http://sonarqube:9000"
         credentialsId: "sonar-token"
 
@@ -40,4 +40,4 @@ credentials:
               scope: GLOBAL
               id: "sonar-token"
               description: "Token para SonarQube"
-              secret: "admin123456789"
+              secret: "squ_0e5d4cf5243482083cae80b68e26db616bf05c0a"

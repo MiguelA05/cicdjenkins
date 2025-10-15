@@ -5,29 +5,18 @@ import com.cloudbees.plugins.credentials.*
 import com.cloudbees.plugins.credentials.domains.*
 import org.jenkinsci.plugins.plaincredentials.impl.StringCredentialsImpl
 import hudson.util.Secret
+import hudson.plugins.sonar.SonarGlobalConfiguration
+import hudson.plugins.sonar.SonarInstallation
 
 def instance = Jenkins.getInstance()
 
 println "=== INICIALIZACIÓN COMPLETA DE JENKINS ==="
 
-// 1. CREAR CREDENCIALES
-println "1. Configurando credenciales..."
-def store = instance.getExtensionList('com.cloudbees.plugins.credentials.SystemCredentialsProvider')[0].getStore()
-def c = new StringCredentialsImpl(
-    CredentialsScope.GLOBAL,
-    "sonar-token",
-    "SonarQube token (hardcoded for testing)",
-    Secret.fromString("admin123456789")
-)
-store.addCredentials(Domain.global(), c)
-println "✅ Credenciales creadas"
+// Nota: Las credenciales y la configuración de SonarQube se manejan en jenkins.yaml (JCasC)
+println "ℹ️ Credenciales y SonarQube configurados vía JCasC (jenkins.yaml)"
 
-// 2. CONFIGURAR SONARQUBE (OPCIONAL)
-println "2. Configurando SonarQube..."
-println "ℹ️ SonarQube configuration skipped (SonarQube disabled)"
-
-// 3. CREAR/ACTUALIZAR PIPELINE
-println "3. Configurando pipeline principal..."
+// 1. CREAR/ACTUALIZAR PIPELINE
+println "1. Configurando pipeline principal..."
 def jobName = "jwtmanual-pipeline"
 
 // Eliminar job existente si existe
@@ -61,6 +50,7 @@ pipeline {
         MVN_HOME = tool(name: 'Maven-3.9', type: 'maven')
         JDK_HOME = tool(name: 'jdk21', type: 'jdk')
         MVN = "${MVN_HOME}/bin/mvn"
+        SONAR_HOST_URL = "http://sonarqube:9000"
     }
 
     stages {
@@ -94,6 +84,51 @@ pipeline {
                         reportFiles: 'index.html',
                         reportName: 'Reporte de Cobertura (service)'
                     ])
+                }
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                script {
+                    dir('service') {
+                        echo "🔍 Iniciando análisis de calidad con SonarQube..."
+                        withSonarQubeEnv('SonarQube') {
+                            sh """
+                                ${MVN} sonar:sonar \
+                                    -Dsonar.projectKey=jwtmanual-taller1-micro \
+                                    -Dsonar.projectName='JWT Manual Taller 1 Microservice' \
+                                    -Dsonar.projectVersion=1.0 \
+                                    -Dsonar.sources=src/main/java \
+                                    -Dsonar.tests=src/test/java \
+                                    -Dsonar.java.binaries=target/classes \
+                                    -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml \
+                                    -Dsonar.junit.reportPaths=target/surefire-reports \
+                                    -Dsonar.java.source=21 \
+                                    -Dsonar.java.target=21 \
+                                    -Dsonar.sourceEncoding=UTF-8
+                            """
+                        }
+                        echo "✅ Análisis de SonarQube completado"
+                    }
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                script {
+                    echo "🚦 Esperando resultado del Quality Gate..."
+                    timeout(time: 5, unit: 'MINUTES') {
+                        def qg = waitForQualityGate()
+                        if (qg.status != 'OK') {
+                            echo "⚠️ Quality Gate falló: ${qg.status}"
+                            echo "ℹ️ Continuando pipeline a pesar del fallo..."
+                            // No fallar el build, solo advertir
+                        } else {
+                            echo "✅ Quality Gate aprobado!"
+                        }
+                    }
                 }
             }
         }
@@ -149,13 +184,29 @@ pipeline {
             }
         }
     }
+
+    post {
+        always {
+            echo "📊 Pipeline completado"
+            echo "🔗 Reportes disponibles:"
+            echo "   - Cobertura de código: Reporte de Cobertura (service)"
+            echo "   - Calidad de código: SonarQube (http://localhost:9001)"
+            echo "   - Tests E2E: Reporte Allure (E2E)"
+        }
+        success {
+            echo "✅ Pipeline ejecutado exitosamente"
+        }
+        failure {
+            echo "❌ Pipeline falló"
+        }
+    }
 }
 '''
 
 def flowDefinition = new CpsFlowDefinition(pipelineScript, true)
 def newJob = instance.createProject(WorkflowJob.class, jobName)
 newJob.setDefinition(flowDefinition)
-newJob.setDescription("Pipeline completo para jwtmanual-taller1-micro: build, test, quality, E2E con automation-tests")
+newJob.setDescription("Pipeline completo para jwtmanual-taller1-micro: build, test, SonarQube quality analysis, E2E con automation-tests")
 newJob.save()
 
 println "✅ Pipeline ${jobName} creado exitosamente"
@@ -163,7 +214,7 @@ println "📋 Configuración del pipeline:"
 println "   - SERVICE_REPO_URL: https://github.com/Tourment0412/jwtmanual-taller1-micro.git"
 println "   - AUTOMATION_TESTS_REPO_URL: https://github.com/MiguelA05/automation-tests.git"
 println "   - AUT_TESTS_BASE_URL: http://jwtmanual-taller1-micro:8080"
-println "   - Sin jacocoAdapter (usando solo publishHTML)"
-println "   - Tests E2E ejecutados desde host"
+println "   - SonarQube: HABILITADO (http://sonarqube:9000)"
+println "   - Quality Gate: HABILITADO (no bloquea el build)"
 
 println "=== INICIALIZACIÓN COMPLETADA ==="
