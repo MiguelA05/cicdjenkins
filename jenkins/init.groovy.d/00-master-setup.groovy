@@ -101,7 +101,7 @@ pipeline {
         stage('Allure (service)') {
             steps {
                 dir('service') {
-                    sh "if [ -d 'target/allure-results' ]; then ${MVN} -q -e allure:report; else echo 'No hay reportes Allure disponibles para el servicio'; fi"
+                    sh "if [ -d 'target/allure-results' ]; then ${MVN} -q -e allure:report; else echo '⚠️ No hay reportes Allure disponibles para el servicio - continuando sin reportes'; fi"
                 }
                 publishHTML([
                     allowMissing: true,
@@ -128,14 +128,18 @@ pipeline {
                             // Ejecutar tests E2E directamente
                             sh "${MVN} clean test -Dtest=CucumberTest -Dmaven.test.failure.ignore=true"
                             
-                            // Generar reporte Allure
-                            sh "${MVN} allure:report -Dmaven.test.failure.ignore=true || echo 'Error generando reporte Allure'"
+                            // Generar reporte Allure (OBLIGATORIO)
+                            sh "${MVN} allure:report"
+                            
+                            // Verificar que el reporte se generó correctamente
+                            sh "test -f target/site/allure-maven-plugin/index.html || (echo '❌ ERROR: Reporte Allure no se generó correctamente' && exit 1)"
+                            echo "✅ Reporte Allure generado exitosamente"
                         }
                     }
                 }
                 junit 'automation-tests/target/surefire-reports/*.xml'
                 publishHTML([
-                    allowMissing: true,
+                    allowMissing: false,
                     alwaysLinkToLastBuild: true,
                     keepAll: true,
                     reportDir: 'automation-tests/target/site/allure-maven-plugin',
