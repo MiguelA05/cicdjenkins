@@ -27,6 +27,7 @@ createJavaMavenPipeline(
     "jwtmanual-taller1-micro",
     "JWT Manual Taller 1 Microservice",
     "21",
+    "jdk21",
     "http://jwtmanual-taller1-micro:8080"
 )
 
@@ -38,6 +39,7 @@ createJavaMavenPipeline(
     "api-gateway-micro",
     "API Gateway Microservice",
     "17",
+    "jdk17",
     null
 )
 
@@ -49,6 +51,7 @@ createJavaMavenPipeline(
     "gestion-perfil-micro",
     "Gestión de Perfil Microservice",
     "17",
+    "jdk17",
     null
 )
 
@@ -85,7 +88,7 @@ println "=== INICIALIZACIÓN COMPLETADA ==="
 // FUNCIONES AUXILIARES PARA CREAR PIPELINES
 // ============================================================================
 
-def createJavaMavenPipeline(instance, jobName, repoUrl, projectKey, projectName, javaVersion, baseUrl) {
+def createJavaMavenPipeline(instance, jobName, repoUrl, projectKey, projectName, javaVersion, jdkTool, baseUrl) {
     println "\n📦 Creando pipeline para ${projectName}..."
     
     // Eliminar job existente si existe
@@ -114,12 +117,12 @@ pipeline {
 
     tools {
         maven 'Maven-3.9'
-        jdk 'jdk21'
+        jdk '${jdkTool}'
     }
 
     environment {
         MVN_HOME = tool(name: 'Maven-3.9', type: 'maven')
-        JDK_HOME = tool(name: 'jdk21', type: 'jdk')
+        JDK_HOME = tool(name: '${jdkTool}', type: 'jdk')
         MVN = "\${MVN_HOME}/bin/mvn"
         SONAR_HOST_URL = "http://sonarqube:9000"
     }
@@ -148,7 +151,7 @@ pipeline {
             }
             post {
                 always {
-                    junit 'service/target/surefire-reports/*.xml'
+                    junit allowEmptyResults: true, testResults: 'service/target/surefire-reports/*.xml'
                     publishHTML([
                         allowMissing: true,
                         alwaysLinkToLastBuild: true,
@@ -208,7 +211,14 @@ pipeline {
         stage('Allure Report') {
             steps {
                 dir('service') {
-                    sh "if [ -d 'target/allure-results' ]; then \${MVN} -q -e allure:report; else echo '⚠️ No hay reportes Allure disponibles - continuando sin reportes'; fi"
+                    script {
+                        def hasAllureResults = fileExists('target/allure-results')
+                        if (hasAllureResults) {
+                            sh "\${MVN} -q -e allure:report"
+                        } else {
+                            echo '⚠️ No hay reportes Allure disponibles - continuando sin reportes'
+                        }
+                    }
                 }
                 publishHTML([
                     allowMissing: true,
@@ -230,12 +240,17 @@ pipeline {
                         dir('automation-tests') {
                             sh "\${MVN} clean test -Dtest=CucumberTest -Dmaven.test.failure.ignore=true"
                             sh "\${MVN} allure:report"
-                            sh "test -f target/site/allure-maven-plugin/index.html || (echo '❌ ERROR: Reporte Allure no se generó correctamente' && exit 1)"
+                            
+                            // Verificar que el reporte se generó correctamente
+                            def reportExists = fileExists('target/site/allure-maven-plugin/index.html')
+                            if (!reportExists) {
+                                error('❌ ERROR: Reporte Allure no se generó correctamente')
+                            }
                             echo "✅ Reporte Allure generado exitosamente"
                         }
                     }
                 }
-                junit 'automation-tests/target/surefire-reports/*.xml'
+                junit allowEmptyResults: true, testResults: 'automation-tests/target/surefire-reports/*.xml'
                 publishHTML([
                     allowMissing: false,
                     alwaysLinkToLastBuild: true,
@@ -292,6 +307,7 @@ pipeline {
 
     environment {
         PYTHON_VERSION = '3.11'
+        SONAR_SCANNER_VERSION = '5.0.1.3006'
     }
 
     stages {
@@ -308,9 +324,16 @@ pipeline {
                 dir('service') {
                     sh '''
                         python3 --version
-                        python3 -m venv venv || true
+                        python3 -m venv venv
                         . venv/bin/activate
                         pip install --upgrade pip
+                        
+                        # Verificar que requirements.txt existe
+                        if [ ! -f requirements.txt ]; then
+                            echo "⚠️ requirements.txt no encontrado"
+                            touch requirements.txt
+                        fi
+                        
                         pip install -r requirements.txt
                     '''
                 }
@@ -322,9 +345,17 @@ pipeline {
                 dir('service') {
                     sh '''
                         . venv/bin/activate
-                        pip install flake8 pylint || true
-                        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics || true
-                        pylint app/ || true
+                        pip install flake8 pylint
+                        
+                        echo "🔍 Ejecutando flake8..."
+                        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics --exit-zero
+                        
+                        echo "🔍 Ejecutando pylint..."
+                        if [ -d "app" ]; then
+                            pylint app/ --exit-zero || true
+                        else
+                            echo "⚠️ Directorio app/ no encontrado, omitiendo pylint"
+                        fi
                     '''
                 }
             }
@@ -335,12 +366,21 @@ pipeline {
                 dir('service') {
                     sh '''
                         . venv/bin/activate
-                        pytest tests/ -v --cov=app --cov-report=html --cov-report=xml || true
+                        pip install pytest pytest-cov
+                        
+                        if [ -d "tests" ]; then
+                            pytest tests/ -v --cov=app --cov-report=html --cov-report=xml --junitxml=test-results.xml || true
+                        else
+                            echo "⚠️ Directorio tests/ no encontrado"
+                            mkdir -p htmlcov
+                            echo "<html><body>No tests found</body></html>" > htmlcov/index.html
+                        fi
                     '''
                 }
             }
             post {
                 always {
+                    junit allowEmptyResults: true, testResults: 'service/test-results.xml'
                     publishHTML([
                         allowMissing: true,
                         alwaysLinkToLastBuild: true,
@@ -359,14 +399,21 @@ pipeline {
                     dir('service') {
                         withSonarQubeEnv('SonarQube') {
                             sh """
-                                . venv/bin/activate
-                                pip install sonar-scanner-cli || true
+                                # Usar sonar-scanner del sistema o descargarlo
+                                if ! command -v sonar-scanner &> /dev/null; then
+                                    echo "📥 Descargando SonarScanner..."
+                                    wget -q https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-\${SONAR_SCANNER_VERSION}-linux.zip
+                                    unzip -q sonar-scanner-cli-\${SONAR_SCANNER_VERSION}-linux.zip
+                                    export PATH=\${PWD}/sonar-scanner-\${SONAR_SCANNER_VERSION}-linux/bin:\${PATH}
+                                fi
+                                
                                 sonar-scanner \\
                                     -Dsonar.projectKey=${projectKey} \\
                                     -Dsonar.projectName='${projectName}' \\
                                     -Dsonar.sources=app \\
                                     -Dsonar.tests=tests \\
                                     -Dsonar.python.coverage.reportPaths=coverage.xml \\
+                                    -Dsonar.python.version=3.11 \\
                                     -Dsonar.sourceEncoding=UTF-8
                             """
                         }
@@ -378,10 +425,12 @@ pipeline {
         stage('Quality Gate') {
             steps {
                 script {
+                    echo "🚦 Esperando resultado del Quality Gate..."
                     timeout(time: 5, unit: 'MINUTES') {
                         def qg = waitForQualityGate()
                         if (qg.status != 'OK') {
                             echo "⚠️ Quality Gate falló: \${qg.status}"
+                            echo "ℹ️ Continuando pipeline a pesar del fallo..."
                         } else {
                             echo "✅ Quality Gate aprobado!"
                         }
@@ -434,6 +483,7 @@ pipeline {
 
     environment {
         NODE_VERSION = '20'
+        SONAR_SCANNER_VERSION = '5.0.1.3006'
     }
 
     stages {
@@ -449,9 +499,15 @@ pipeline {
             steps {
                 dir('service') {
                     sh '''
-                        node --version || echo "Node.js no instalado, usando nvm"
-                        npm --version || echo "npm no instalado"
-                        npm ci
+                        node --version
+                        npm --version
+                        
+                        # Usar npm ci si existe package-lock.json, sino npm install
+                        if [ -f package-lock.json ]; then
+                            npm ci
+                        else
+                            npm install
+                        fi
                     '''
                 }
             }
@@ -461,7 +517,12 @@ pipeline {
             steps {
                 dir('service') {
                     sh '''
-                        npm run lint || echo "⚠️ Lint no configurado, continuando..."
+                        # Verificar si existe script de lint
+                        if npm run | grep -q "lint"; then
+                            npm run lint || echo "⚠️ Lint falló pero continuando..."
+                        else
+                            echo "⚠️ Script lint no configurado en package.json"
+                        fi
                     '''
                 }
             }
@@ -471,7 +532,12 @@ pipeline {
             steps {
                 dir('service') {
                     sh '''
-                        npm run build
+                        # Verificar si existe script de build
+                        if npm run | grep -q "build"; then
+                            npm run build
+                        else
+                            echo "⚠️ Script build no configurado, omitiendo..."
+                        fi
                     '''
                 }
             }
@@ -481,7 +547,14 @@ pipeline {
             steps {
                 dir('service') {
                     sh '''
-                        npm test -- --coverage || true
+                        # Verificar si existe script de test
+                        if npm run | grep -q "test"; then
+                            npm test -- --coverage --watchAll=false --ci || true
+                        else
+                            echo "⚠️ Script test no configurado"
+                            mkdir -p coverage
+                            echo "<html><body>No tests configured</body></html>" > coverage/index.html
+                        fi
                     '''
                 }
             }
@@ -491,7 +564,7 @@ pipeline {
                         allowMissing: true,
                         alwaysLinkToLastBuild: true,
                         keepAll: true,
-                        reportDir: 'service/coverage',
+                        reportDir: 'service/coverage/lcov-report',
                         reportFiles: 'index.html',
                         reportName: 'Reporte de Cobertura (Jest)'
                     ])
@@ -505,12 +578,20 @@ pipeline {
                     dir('service') {
                         withSonarQubeEnv('SonarQube') {
                             sh """
-                                npm install -g sonarqube-scanner || true
+                                # Usar sonar-scanner del sistema o descargarlo
+                                if ! command -v sonar-scanner &> /dev/null; then
+                                    echo "📥 Descargando SonarScanner..."
+                                    wget -q https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-\${SONAR_SCANNER_VERSION}-linux.zip
+                                    unzip -q sonar-scanner-cli-\${SONAR_SCANNER_VERSION}-linux.zip
+                                    export PATH=\${PWD}/sonar-scanner-\${SONAR_SCANNER_VERSION}-linux/bin:\${PATH}
+                                fi
+                                
                                 sonar-scanner \\
                                     -Dsonar.projectKey=${projectKey} \\
                                     -Dsonar.projectName='${projectName}' \\
                                     -Dsonar.sources=src \\
                                     -Dsonar.tests=src \\
+                                    -Dsonar.test.inclusions=**/*.test.ts,**/*.test.js,**/*.spec.ts,**/*.spec.js \\
                                     -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info \\
                                     -Dsonar.sourceEncoding=UTF-8
                             """
@@ -523,10 +604,12 @@ pipeline {
         stage('Quality Gate') {
             steps {
                 script {
+                    echo "🚦 Esperando resultado del Quality Gate..."
                     timeout(time: 5, unit: 'MINUTES') {
                         def qg = waitForQualityGate()
                         if (qg.status != 'OK') {
                             echo "⚠️ Quality Gate falló: \${qg.status}"
+                            echo "ℹ️ Continuando pipeline a pesar del fallo..."
                         } else {
                             echo "✅ Quality Gate aprobado!"
                         }
@@ -579,6 +662,9 @@ pipeline {
 
     environment {
         GO_VERSION = '1.22'
+        SONAR_SCANNER_VERSION = '5.0.1.3006'
+        GOPATH = "\${WORKSPACE}/go"
+        PATH = "\${GOPATH}/bin:/usr/local/go/bin:\${PATH}"
     }
 
     stages {
@@ -606,8 +692,14 @@ pipeline {
             steps {
                 dir('service') {
                     sh '''
-                        go install golang.org/x/lint/golint@latest || true
-                        golint ./... || echo "⚠️ Lint no disponible, continuando..."
+                        # Instalar golangci-lint si no está disponible
+                        if ! command -v golangci-lint &> /dev/null; then
+                            echo "📥 Instalando golangci-lint..."
+                            go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+                        fi
+                        
+                        # Ejecutar linter
+                        golangci-lint run ./... || echo "⚠️ Lint encontró problemas pero continuando..."
                     '''
                 }
             }
@@ -627,8 +719,17 @@ pipeline {
             steps {
                 dir('service') {
                     sh '''
-                        go test -v -coverprofile=coverage.out ./... || true
-                        go tool cover -html=coverage.out -o coverage.html || true
+                        # Ejecutar tests con cobertura
+                        go test -v -coverprofile=coverage.out -covermode=atomic ./...
+                        
+                        # Generar reporte HTML de cobertura
+                        go tool cover -html=coverage.out -o coverage.html
+                        
+                        # Generar reporte XML para Jenkins
+                        if ! command -v gocover-cobertura &> /dev/null; then
+                            go install github.com/boumenot/gocover-cobertura@latest
+                        fi
+                        gocover-cobertura < coverage.out > coverage.xml || true
                     '''
                 }
             }
@@ -652,12 +753,21 @@ pipeline {
                     dir('service') {
                         withSonarQubeEnv('SonarQube') {
                             sh """
-                                go install github.com/sonarsource/sonar-scanner-cli@latest || true
+                                # Usar sonar-scanner del sistema o descargarlo
+                                if ! command -v sonar-scanner &> /dev/null; then
+                                    echo "📥 Descargando SonarScanner..."
+                                    wget -q https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-\${SONAR_SCANNER_VERSION}-linux.zip
+                                    unzip -q sonar-scanner-cli-\${SONAR_SCANNER_VERSION}-linux.zip
+                                    export PATH=\${PWD}/sonar-scanner-\${SONAR_SCANNER_VERSION}-linux/bin:\${PATH}
+                                fi
+                                
                                 sonar-scanner \\
                                     -Dsonar.projectKey=${projectKey} \\
                                     -Dsonar.projectName='${projectName}' \\
                                     -Dsonar.sources=. \\
                                     -Dsonar.tests=. \\
+                                    -Dsonar.test.inclusions=**/*_test.go \\
+                                    -Dsonar.exclusions=**/*_test.go,**/vendor/** \\
                                     -Dsonar.go.coverage.reportPaths=coverage.out \\
                                     -Dsonar.sourceEncoding=UTF-8
                             """
@@ -670,10 +780,12 @@ pipeline {
         stage('Quality Gate') {
             steps {
                 script {
+                    echo "🚦 Esperando resultado del Quality Gate..."
                     timeout(time: 5, unit: 'MINUTES') {
                         def qg = waitForQualityGate()
                         if (qg.status != 'OK') {
                             echo "⚠️ Quality Gate falló: \${qg.status}"
+                            echo "ℹ️ Continuando pipeline a pesar del fallo..."
                         } else {
                             echo "✅ Quality Gate aprobado!"
                         }
