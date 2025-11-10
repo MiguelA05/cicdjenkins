@@ -35,7 +35,7 @@ def sonarToken = new StringCredentialsImpl(
     CredentialsScope.GLOBAL,
     "sonar-token",
     "Token para SonarQube (Global Analysis)",
-    Secret.fromString("sqa_dcbaa2067ba3e2341fbc3c14aaf5da9c3acceb36")
+    Secret.fromString("squ_c9c4f98a83783fb601f4db5066f447ceafd0aa8b")
 )
 store.addCredentials(domain, sonarToken)
 println "✅ Credencial sonar-token creada/actualizada correctamente"
@@ -67,8 +67,8 @@ createJavaMavenPipeline(
     "https://github.com/MiguelA05/api-gateway-micro.git",
     "api-gateway-micro",
     "API Gateway Microservice",
-    "17",
-    "jdk17",
+    "21",
+    "jdk21",
     null
 )
 
@@ -79,8 +79,8 @@ createJavaMavenPipeline(
     "https://github.com/Tourment0412/gestion-perfil-micro.git",
     "gestion-perfil-micro",
     "Gestión de Perfil Microservice",
-    "17",
-    "jdk17",
+    "21",
+    "jdk21",
     null
 )
 
@@ -446,7 +446,7 @@ pipeline {
                                     if ! command -v sonar-scanner &> /dev/null; then
                                         echo "📥 Descargando SonarScanner..."
                                         wget -q https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${dollar}{SONAR_SCANNER_VERSION}-linux.zip
-                                        unzip -q sonar-scanner-cli-${dollar}{SONAR_SCANNER_VERSION}-linux.zip
+                                        unzip -o -q sonar-scanner-cli-${dollar}{SONAR_SCANNER_VERSION}-linux.zip
                                         export PATH=${dollar}{PWD}/sonar-scanner-${dollar}{SONAR_SCANNER_VERSION}-linux/bin:${dollar}{PATH}
                                     fi
                                     
@@ -629,7 +629,7 @@ pipeline {
                                     if ! command -v sonar-scanner &> /dev/null; then
                                         echo "📥 Descargando SonarScanner..."
                                         wget -q https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${dollar}{SONAR_SCANNER_VERSION}-linux.zip
-                                        unzip -q sonar-scanner-cli-${dollar}{SONAR_SCANNER_VERSION}-linux.zip
+                                        unzip -o -q sonar-scanner-cli-${dollar}{SONAR_SCANNER_VERSION}-linux.zip
                                         export PATH=${dollar}{PWD}/sonar-scanner-${dollar}{SONAR_SCANNER_VERSION}-linux/bin:${dollar}{PATH}
                                     fi
                                     
@@ -808,7 +808,7 @@ pipeline {
                                     if ! command -v sonar-scanner &> /dev/null; then
                                         echo "📥 Descargando SonarScanner..."
                                         wget -q https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${dollar}{SONAR_SCANNER_VERSION}-linux.zip
-                                        unzip -q sonar-scanner-cli-${dollar}{SONAR_SCANNER_VERSION}-linux.zip
+                                        unzip -o -q sonar-scanner-cli-${dollar}{SONAR_SCANNER_VERSION}-linux.zip
                                         export PATH=${dollar}{PWD}/sonar-scanner-${dollar}{SONAR_SCANNER_VERSION}-linux/bin:${dollar}{PATH}
                                     fi
                                     
