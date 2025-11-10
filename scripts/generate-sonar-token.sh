@@ -130,6 +130,9 @@ update_jenkins_config() {
     local new_token=$1
     local script_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
     local jenkins_dir="${script_dir}/../jenkins"
+    # Escapar caracteres especiales para uso seguro en sed (/, \ y &)
+    local token_escaped
+    token_escaped=$(printf '%s\n' "$new_token" | sed -e 's/[\\/&]/\\&/g')
     
     echo ""
     echo "═══════════════════════════════════════════════════════════════════"
@@ -144,8 +147,10 @@ update_jenkins_config() {
         # Hacer backup
         cp "${jenkins_dir}/jenkins.yaml" "${jenkins_dir}/jenkins.yaml.backup"
         
-        # Reemplazar token usando sed de forma más robusta
-        sed -i "s|secret: \"sq[au]_[^\"]*\"|secret: \"${new_token}\"|g" "${jenkins_dir}/jenkins.yaml"
+        # Reemplazar token usando sed de forma robusta:
+        # - Coincide con la clave secret y reemplaza solo el valor
+        # - Usa token escapado para evitar romper la expresión de sed
+        sed -i -E "s|^(\\s*secret:\\s*\").*(\"\\s*)$|\\1${token_escaped}\\2|g" "${jenkins_dir}/jenkins.yaml"
         
         echo -e "${GREEN}✅ jenkins.yaml actualizado${NC}"
     else
@@ -160,7 +165,7 @@ update_jenkins_config() {
         cp "${jenkins_dir}/init.groovy.d/master_setup.groovy" "${jenkins_dir}/init.groovy.d/master_setup.groovy.backup"
         
         # Reemplazar token en el script Groovy
-        sed -i "s|Secret.fromString(\"sq[au]_[^\"]*\")|Secret.fromString(\"${new_token}\")|g" \
+        sed -i "s|Secret.fromString(\"sq[au]_[^\"]*\")|Secret.fromString(\"${token_escaped}\")|g" \
             "${jenkins_dir}/init.groovy.d/master_setup.groovy"
         
         echo -e "${GREEN}✅ master_setup.groovy actualizado${NC}"
