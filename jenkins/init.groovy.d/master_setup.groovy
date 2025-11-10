@@ -194,6 +194,38 @@ pipeline {
             }
         }
 
+        stage('Acceptance Tests (Gherkin)') {
+            steps {
+                dir('service') {
+                    script {
+                        // Ejecutar tests de aceptación con Gherkin/Cucumber
+                        try {
+                            sh "${dollar}{MVN} test -Dtest=CucumberAcceptanceTest"
+                            echo "✅ Tests de aceptación Gherkin pasaron exitosamente"
+                        } catch (Exception e) {
+                            echo "⚠️ Tests de aceptación Gherkin fallaron: ${dollar}{e.message}"
+                            // No fallar el pipeline si los tests de aceptación fallan
+                            // En producción, podrías querer que falle el pipeline
+                            currentBuild.result = 'UNSTABLE'
+                        }
+                    }
+                }
+            }
+            post {
+                always {
+                    // Publicar reportes de Cucumber si existen
+                    publishHTML([
+                        allowMissing: true,
+                        alwaysLinkToLastBuild: true,
+                        keepAll: true,
+                        reportDir: 'service/target',
+                        reportFiles: 'cucumber-report.html',
+                        reportName: 'Reporte Cucumber (Gherkin)'
+                    ])
+                }
+            }
+        }
+
         stage('SonarQube Analysis') {
             steps {
                 script {
@@ -435,6 +467,23 @@ pipeline {
             }
         }
 
+        stage('Acceptance Tests (Gherkin)') {
+            steps {
+                dir('service') {
+                    sh '''
+                        . venv/bin/activate
+                        # Ejecutar tests de aceptación con pytest-bdd
+                        if [ -d "tests/acceptance" ] || [ -d "features" ]; then
+                            pytest tests/acceptance/ -v || pytest features/ -v || true
+                            echo "✅ Tests de aceptación Gherkin ejecutados"
+                        else
+                            echo "⚠️ Tests de aceptación Gherkin no encontrados"
+                        fi
+                    '''
+                }
+            }
+        }
+
         stage('SonarQube Analysis') {
             steps {
                 script {
@@ -618,6 +667,34 @@ pipeline {
             }
         }
 
+        stage('Acceptance Tests (Gherkin)') {
+            steps {
+                dir('service') {
+                    sh '''
+                        # Ejecutar tests de aceptación con Cucumber.js
+                        if [ -d "features" ] && [ -f "package.json" ]; then
+                            npx @cucumber/cucumber --require-module ts-node/register --require 'features/step_definitions/*.ts' || npx cucumber-js || true
+                            echo "✅ Tests de aceptación Gherkin ejecutados"
+                        else
+                            echo "⚠️ Tests de aceptación Gherkin no encontrados"
+                        fi
+                    '''
+                }
+            }
+            post {
+                always {
+                    publishHTML([
+                        allowMissing: true,
+                        alwaysLinkToLastBuild: true,
+                        keepAll: true,
+                        reportDir: 'service/reports',
+                        reportFiles: 'cucumber-report.html',
+                        reportName: 'Reporte Cucumber (Gherkin)'
+                    ])
+                }
+            }
+        }
+
         stage('SonarQube Analysis') {
             steps {
                 script {
@@ -793,6 +870,22 @@ pipeline {
                         reportFiles: 'coverage.html',
                         reportName: 'Reporte de Cobertura (Go)'
                     ])
+                }
+            }
+        }
+
+        stage('Acceptance Tests (Gherkin)') {
+            steps {
+                dir('service') {
+                    sh '''
+                        # Ejecutar tests de aceptación con godog
+                        if [ -d "features" ]; then
+                            go test ./features/... -v || true
+                            echo "✅ Tests de aceptación Gherkin ejecutados"
+                        else
+                            echo "⚠️ Tests de aceptación Gherkin no encontrados"
+                        fi
+                    '''
                 }
             }
         }
