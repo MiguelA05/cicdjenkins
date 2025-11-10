@@ -35,7 +35,7 @@ createJavaMavenPipeline(
 createJavaMavenPipeline(
     instance,
     "api-gateway-pipeline",
-    "https://github.com/Tourment0412/api-gateway-micro.git",
+    "https://github.com/MiguelA05/api-gateway-micro.git",
     "api-gateway-micro",
     "API Gateway Microservice",
     "17",
@@ -59,7 +59,7 @@ createJavaMavenPipeline(
 createPythonPipeline(
     instance,
     "notifications-service-pipeline",
-    "https://github.com/Tourment0412/notifications-service-micro.git",
+    "https://github.com/MiguelA05/notifications-service-micro.git",
     "notifications-service-micro",
     "Notifications Service Microservice"
 )
@@ -77,7 +77,7 @@ createNodeJSPipeline(
 createGoPipeline(
     instance,
     "health-check-app-pipeline",
-    "https://github.com/Tourment0412/health-check-app-micro.git",
+    "https://github.com/AndresZunigaZ2005/health-check-app-micro.git",
     "health-check-app-micro",
     "Health Check App Microservice"
 )
@@ -146,8 +146,8 @@ pipeline {
             steps {
                 dir('service') {
                     sh 'ls -la'
-                    sh "{MVN} -v'
-                    sh "{MVN} clean verify'
+                    sh "${dollar}{MVN} -v"
+                    sh "${dollar}{MVN} clean verify"
                 }
             }
             post {
@@ -172,7 +172,7 @@ pipeline {
                         echo "🔍 Iniciando análisis de calidad con SonarQube..."
                         withSonarQubeEnv('SonarQube') {
                             sh \"\"\"
-                                ${dollar}{MVN} sonar:sonar \\\\
+                                \${MVN} sonar:sonar \\\\
                                     -Dsonar.projectKey=${projectKey} \\\\
                                     -Dsonar.projectName='${projectName}' \\\\
                                     -Dsonar.projectVersion=1.0 \\\\
@@ -215,7 +215,7 @@ pipeline {
                     script {
                         def hasAllureResults = fileExists('target/allure-results')
                         if (hasAllureResults) {
-                            sh "{MVN} -q -e allure:report"
+                            sh "${dollar}{MVN} -q -e allure:report"
                         } else {
                             echo '⚠️ No hay reportes Allure disponibles - continuando sin reportes'
                         }
@@ -236,11 +236,11 @@ pipeline {
             steps {
                 script {
                     withEnv([
-                        "AUT_TESTS_BASE_URL={params.AUT_TESTS_BASE_URL}"
+                        "AUT_TESTS_BASE_URL=${dollar}{params.AUT_TESTS_BASE_URL}"
                     ]) {
                         dir('automation-tests') {
-                            sh "{MVN} clean test -Dtest=CucumberTest -Dmaven.test.failure.ignore=true'
-                            sh "{MVN} allure:report"
+                            sh "${dollar}{MVN} clean test -Dtest=CucumberTest -Dmaven.test.failure.ignore=true"
+                            sh "${dollar}{MVN} allure:report"
                             
                             // Verificar que el reporte se generó correctamente
                             def reportExists = fileExists('target/site/allure-maven-plugin/index.html')
