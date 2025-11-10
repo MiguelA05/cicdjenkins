@@ -323,29 +323,7 @@ fi
 update_jenkins_config "$NEW_TOKEN"
 
 # Paso 5: Aplicar cambios a Jenkins (si está corriendo)
-echo ""
-read -p "¿Deseas aplicar los cambios a Jenkins ahora? (y/n) " -n 1 -r
-echo ""
-
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    apply_to_jenkins
-else
-    echo ""
-    echo "ℹ️  Cambios guardados localmente"
-    echo ""
-    echo "Para aplicar los cambios manualmente:"
-    echo ""
-    echo "  1. Copiar archivos al contenedor:"
-    echo "     podman cp jenkins/jenkins.yaml jenkins:/var/jenkins_home/jenkins.yaml"
-    echo "     podman cp jenkins/init.groovy.d/master_setup.groovy jenkins:/var/jenkins_home/init.groovy.d/"
-    echo ""
-    echo "  2. Eliminar credentials.xml:"
-    echo "     podman exec jenkins rm -f /var/jenkins_home/credentials.xml"
-    echo ""
-    echo "  3. Reiniciar Jenkins:"
-    echo "     podman restart jenkins"
-    echo ""
-fi
+apply_to_jenkins
 
 echo ""
 echo "╔═══════════════════════════════════════════════════════════════════╗"
