@@ -124,7 +124,7 @@ pipeline {
     environment {
         MVN_HOME = tool(name: 'Maven-3.9', type: 'maven')
         JDK_HOME = tool(name: '${jdkTool}', type: 'jdk')
-        MVN = "{MVN_HOME}/bin/mvn"
+        MVN = "${dollar}{MVN_HOME}/bin/mvn"
         SONAR_HOST_URL = "http://sonarqube:9000"
     }
 
@@ -176,6 +176,7 @@ pipeline {
                                     -Dsonar.projectKey=${projectKey} \\\\
                                     -Dsonar.projectName='${projectName}' \\\\
                                     -Dsonar.projectVersion=1.0 \\\\
+                                    -Dsonar.token=\${SONAR_AUTH_TOKEN} \\\\
                                     -Dsonar.sources=src/main/java \\\\
                                     -Dsonar.tests=src/test/java \\\\
                                     -Dsonar.java.binaries=target/classes \\\\
@@ -412,6 +413,7 @@ pipeline {
                                 sonar-scanner \\
                                     -Dsonar.projectKey=${projectKey} \\
                                     -Dsonar.projectName='${projectName}' \\
+                                    -Dsonar.token=\${SONAR_AUTH_TOKEN} \\
                                     -Dsonar.sources=app \\
                                     -Dsonar.tests=tests \\
                                     -Dsonar.python.coverage.reportPaths=coverage.xml \\
@@ -592,6 +594,7 @@ pipeline {
                                 sonar-scanner \\
                                     -Dsonar.projectKey=${projectKey} \\
                                     -Dsonar.projectName='${projectName}' \\
+                                    -Dsonar.token=\${SONAR_AUTH_TOKEN} \\
                                     -Dsonar.sources=src \\
                                     -Dsonar.tests=src \\
                                     -Dsonar.test.inclusions=**/*.test.ts,**/*.test.js,**/*.spec.ts,**/*.spec.js \\
@@ -768,6 +771,7 @@ pipeline {
                                 sonar-scanner \\
                                     -Dsonar.projectKey=${projectKey} \\
                                     -Dsonar.projectName='${projectName}' \\
+                                    -Dsonar.token=\${SONAR_AUTH_TOKEN} \\
                                     -Dsonar.sources=. \\
                                     -Dsonar.tests=. \\
                                     -Dsonar.test.inclusions=**/*_test.go \\
