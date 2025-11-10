@@ -40,17 +40,4 @@ credentials:
               scope: GLOBAL
               id: "sonar-token"
               description: "Token para SonarQube (Global Analysis)"
-              secret: "
-🔑 Generando nuevo token 'jenkins-global-analysis-token'...
-[0;32m✅ Token generado exitosamente[0m
-
-═══════════════════════════════════════════════════════════════════
-[0;34m🔐 NUEVO TOKEN:[0m
-═══════════════════════════════════════════════════════════════════
-
-[0;32msqu_561d042e3db9210d1bd6a81312c6587a31f90800[0m
-
-═══════════════════════════════════════════════════════════════════
-
-[0;32m✅ Token guardado en: /tmp/sonarqube-token.txt[0m
-squ_561d042e3db9210d1bd6a81312c6587a31f90800"
+              secret: "squ_e9c08eddd6bf6d962c1e4b614b9fa7adc3ae85d6"

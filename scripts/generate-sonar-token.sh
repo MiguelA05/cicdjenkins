@@ -5,6 +5,11 @@
 
 set -e
 
+# Estado global para saber si la actualización de archivos fue exitosa
+CONFIG_UPDATED=0
+# Último token generado
+GENERATED_TOKEN=""
+
 # Configuración
 SONARQUBE_HOST="${SONARQUBE_HOST:-http://localhost:9001}"
 SONARQUBE_USER="${SONARQUBE_USER:-admin}"
@@ -121,8 +126,8 @@ generate_token() {
     echo ""
     echo -e "${GREEN}✅ Token guardado en: ${token_file}${NC}"
     
-    # Retornar el token
-    echo "$token"
+    # Guardar token en variable global para uso posterior
+    GENERATED_TOKEN="$token"
 }
 
 # Función para actualizar archivos de Jenkins
@@ -188,7 +193,7 @@ text = path.read_text(encoding="utf-8")
 def replace_secret(match):
     return f'Secret.fromString("{token}")'
 
-new_text, count = re.subn(r'Secret\.fromString\("sq[au]_[^"]*"\)', replace_secret, text, count=1)
+new_text, count = re.subn(r'Secret\.fromString\(".*?"\)', replace_secret, text, count=1)
 if count == 0:
     raise SystemExit("No se encontró Secret.fromString(...) en master_setup.groovy")
 
@@ -206,6 +211,8 @@ PY
     echo "📋 Backups creados:"
     echo "   • jenkins.yaml.backup"
     echo "   • master_setup.groovy.backup"
+    
+    CONFIG_UPDATED=1
 }
 
 # Función para aplicar cambios en Jenkins
@@ -311,7 +318,8 @@ if ! revoke_existing_token "$TOKEN_NAME"; then
 fi
 
 # Paso 3: Generar nuevo token
-NEW_TOKEN=$(generate_token "$TOKEN_NAME")
+generate_token "$TOKEN_NAME"
+NEW_TOKEN="$GENERATED_TOKEN"
 
 if [ -z "$NEW_TOKEN" ]; then
     echo ""
@@ -322,8 +330,13 @@ fi
 # Paso 4: Actualizar archivos de Jenkins
 update_jenkins_config "$NEW_TOKEN"
 
-# Paso 5: Aplicar cambios a Jenkins (si está corriendo)
-apply_to_jenkins
+# Paso 5: Aplicar cambios a Jenkins (si está corriendo y la actualización fue exitosa)
+if [ "$CONFIG_UPDATED" -eq 1 ]; then
+    apply_to_jenkins
+else
+    echo -e "${YELLOW}⚠️  Se omitió la aplicación automática porque la actualización de archivos no fue exitosa${NC}"
+    echo "ℹ️  Revisa el output anterior, corrige el problema y vuelve a ejecutar el script."
+fi
 
 echo ""
 echo "╔═══════════════════════════════════════════════════════════════════╗"
