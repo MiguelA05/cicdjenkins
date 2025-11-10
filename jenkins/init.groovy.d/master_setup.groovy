@@ -713,8 +713,8 @@ pipeline {
     environment {
         GO_VERSION = '1.22'
         SONAR_SCANNER_VERSION = '5.0.1.3006'
-        GOPATH = "{WORKSPACE}/go"
-        PATH = "{GOPATH}/bin:/usr/local/go/bin:{PATH}"
+        GOPATH = "${dollar}{WORKSPACE}/go"
+        PATH = "${dollar}{GOPATH}/bin:/usr/local/go/bin:${dollar}{PATH}"
     }
 
     stages {
