@@ -40,4 +40,4 @@ credentials:
               scope: GLOBAL
               id: "sonar-token"
               description: "Token para SonarQube (Global Analysis)"
-              secret: ""
+              secret: "squ_e9c08eddd6bf6d962c1e4b614b9fa7adc3ae85d6"

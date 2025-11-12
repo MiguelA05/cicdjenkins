@@ -35,7 +35,7 @@ def sonarToken = new StringCredentialsImpl(
     CredentialsScope.GLOBAL,
     "sonar-token",
     "Token para SonarQube (Global Analysis)",
-    Secret.fromString("squ_e9c08eddd6bf6d962c1e4b614b9fa7adc3ae85d6")
+    Secret.fromString("squ_5c19e35b5424751003b7b40241993eeef7e278a2")
 )
 store.addCredentials(domain, sonarToken)
 println "✅ Credencial sonar-token creada/actualizada correctamente"
@@ -236,11 +236,12 @@ pipeline {
                         withSonarQubeEnv('SonarQube') {
                             withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
                                 sh '''
+                                    # Usar sonar.login (compatible con versiones antiguas) o sonar.token
                                     ${dollar}{MVN} sonar:sonar \\
                                         -Dsonar.projectKey=${projectKey} \\
                                         -Dsonar.projectName='${projectName}' \\
                                         -Dsonar.projectVersion=1.0 \\
-                                        -Dsonar.token=${dollar}{SONAR_TOKEN} \\
+                                        -Dsonar.login=${dollar}{SONAR_TOKEN} \\
                                         -Dsonar.sources=src/main/java \\
                                         -Dsonar.tests=src/test/java \\
                                         -Dsonar.java.binaries=target/classes \\
@@ -505,7 +506,7 @@ pipeline {
                                     sonar-scanner \\
                                         -Dsonar.projectKey=${projectKey} \\
                                         -Dsonar.projectName='${projectName}' \\
-                                        -Dsonar.token=${dollar}{SONAR_TOKEN} \\
+                                        -Dsonar.login=${dollar}{SONAR_TOKEN} \\
                                         -Dsonar.sources=app \\
                                         -Dsonar.tests=tests \\
                                         -Dsonar.python.coverage.reportPaths=coverage.xml \\
@@ -716,7 +717,7 @@ pipeline {
                                     sonar-scanner \\
                                         -Dsonar.projectKey=${projectKey} \\
                                         -Dsonar.projectName='${projectName}' \\
-                                        -Dsonar.token=${dollar}{SONAR_TOKEN} \\
+                                        -Dsonar.login=${dollar}{SONAR_TOKEN} \\
                                         -Dsonar.sources=src \\
                                         -Dsonar.tests=src \\
                                         -Dsonar.test.inclusions=**/*.test.ts,**/*.test.js,**/*.spec.ts,**/*.spec.js \\
@@ -793,8 +794,8 @@ pipeline {
     environment {
         GO_VERSION = '1.22'
         SONAR_SCANNER_VERSION = '5.0.1.3006'
-        GOPATH = "${dollar}{WORKSPACE}/go"
-        PATH = "${dollar}{GOPATH}/bin:/usr/local/go/bin:${dollar}{PATH}"
+        GOPATH = "\${WORKSPACE}/go"
+        PATH = "\${GOPATH}/bin:/usr/local/go/bin:\${PATH}"
     }
 
     stages {
@@ -851,7 +852,7 @@ pipeline {
                     sh '''
                         # Ejecutar tests con cobertura (excluyendo tests de aceptación)
                         # Excluir directorio features que contiene tests de aceptación con godog
-                        go test -v -coverprofile=coverage.out -covermode=atomic $(go list ./... | grep -v '/features') || true
+                        go test -v -coverprofile=coverage.out -covermode=atomic \$(go list ./... | grep -v '/features') || true
                         
                         # Generar reporte HTML de cobertura
                         if [ -f coverage.out ]; then
@@ -916,7 +917,7 @@ pipeline {
                                     sonar-scanner \\
                                         -Dsonar.projectKey=${projectKey} \\
                                         -Dsonar.projectName='${projectName}' \\
-                                        -Dsonar.token=${dollar}{SONAR_TOKEN} \\
+                                        -Dsonar.login=${dollar}{SONAR_TOKEN} \\
                                         -Dsonar.sources=. \\
                                         -Dsonar.tests=. \\
                                         -Dsonar.test.inclusions=**/*_test.go \\
