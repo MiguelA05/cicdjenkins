@@ -35,7 +35,7 @@ def sonarToken = new StringCredentialsImpl(
     CredentialsScope.GLOBAL,
     "sonar-token",
     "Token para SonarQube (Global Analysis)",
-    Secret.fromString("squ_5c19e35b5424751003b7b40241993eeef7e278a2")
+    Secret.fromString("squ_8bf87aac7e8ba7ad77c63911d1b54937ec3201ee")
 )
 store.addCredentials(domain, sonarToken)
 println "✅ Credencial sonar-token creada/actualizada correctamente"

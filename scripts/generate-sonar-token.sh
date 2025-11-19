@@ -13,10 +13,14 @@ GENERATED_TOKEN=""
 # Configuración
 SONARQUBE_HOST="${SONARQUBE_HOST:-http://localhost:9001}"
 SONARQUBE_USER="${SONARQUBE_USER:-admin}"
-SONARQUBE_PASSWORD="${SONARQUBE_PASSWORD:-@MiguelAngel05}"
+SONARQUBE_INITIAL_PASSWORD="${SONARQUBE_INITIAL_PASSWORD:-admin}"
+SONARQUBE_FINAL_PASSWORD="${SONARQUBE_FINAL_PASSWORD:-@MiguelAngel05}"
 TOKEN_NAME="${TOKEN_NAME:-jenkins-global-analysis-token}"
 MAX_RETRIES=30
 RETRY_INTERVAL=10
+
+# Variable para almacenar la contraseña actual a usar
+CURRENT_PASSWORD=""
 
 # Colores para output
 RED='\033[0;31m'
@@ -31,6 +35,90 @@ echo "║     🔐 GENERADOR AUTOMÁTICO DE TOKEN DE SONARQUBE                 �
 echo "╚═══════════════════════════════════════════════════════════════════╝"
 echo ""
 
+# Función para verificar si SonarQube requiere cambio de contraseña
+check_password_change_required() {
+    local response=$(curl -s -u "${SONARQUBE_USER}:${SONARQUBE_INITIAL_PASSWORD}" \
+        "${SONARQUBE_HOST}/api/authentication/validate" 2>/dev/null)
+    
+    # Si la validación falla con admin:admin, puede ser que necesite cambio de contraseña
+    if echo "$response" | grep -q '"valid":false'; then
+        return 0  # Requiere cambio de contraseña
+    fi
+    
+    return 1  # No requiere cambio
+}
+
+# Función para cambiar la contraseña de SonarQube
+change_sonarqube_password() {
+    echo ""
+    echo "🔐 SonarQube requiere cambio de contraseña inicial..."
+    echo "   Cambiando de '${SONARQUBE_INITIAL_PASSWORD}' a '${SONARQUBE_FINAL_PASSWORD}'..."
+    
+    local response=$(curl -s -X POST -u "${SONARQUBE_USER}:${SONARQUBE_INITIAL_PASSWORD}" \
+        "${SONARQUBE_HOST}/api/users/change_password" \
+        -d "login=${SONARQUBE_USER}" \
+        -d "password=${SONARQUBE_INITIAL_PASSWORD}" \
+        -d "newPassword=${SONARQUBE_FINAL_PASSWORD}" 2>/dev/null)
+    
+    if echo "$response" | grep -q "errors"; then
+        echo -e "${RED}❌ Error cambiando contraseña${NC}"
+        echo "Respuesta: $response"
+        return 1
+    else
+        echo -e "${GREEN}✅ Contraseña cambiada exitosamente${NC}"
+        CURRENT_PASSWORD="${SONARQUBE_FINAL_PASSWORD}"
+        return 0
+    fi
+}
+
+# Función para detectar qué contraseña usar
+detect_password() {
+    echo "🔍 Detectando contraseña correcta de SonarQube..."
+    
+    # Primero intentar con la contraseña final (si ya está configurado)
+    # Usar /api/authentication/validate que realmente valida la autenticación
+    local test_response=$(curl -s -u "${SONARQUBE_USER}:${SONARQUBE_FINAL_PASSWORD}" \
+        "${SONARQUBE_HOST}/api/authentication/validate" 2>/dev/null)
+    
+    if echo "$test_response" | grep -q '"valid":true'; then
+        echo -e "${GREEN}✅ Usando contraseña final (ya configurada)${NC}"
+        CURRENT_PASSWORD="${SONARQUBE_FINAL_PASSWORD}"
+        return 0
+    fi
+    
+    # Si falla, intentar con la contraseña inicial
+    test_response=$(curl -s -u "${SONARQUBE_USER}:${SONARQUBE_INITIAL_PASSWORD}" \
+        "${SONARQUBE_HOST}/api/authentication/validate" 2>/dev/null)
+    
+    if echo "$test_response" | grep -q '"valid":true'; then
+        echo -e "${YELLOW}⚠️  SonarQube está usando contraseña inicial${NC}"
+        CURRENT_PASSWORD="${SONARQUBE_INITIAL_PASSWORD}"
+        
+        # Verificar si requiere cambio de contraseña
+        if check_password_change_required; then
+            echo "   SonarQube requiere cambio de contraseña..."
+            if change_sonarqube_password; then
+                return 0
+            else
+                echo -e "${YELLOW}⚠️  No se pudo cambiar la contraseña automáticamente${NC}"
+                echo "   Continuando con contraseña inicial..."
+                return 0
+            fi
+        else
+            return 0
+        fi
+    fi
+    
+    echo -e "${RED}❌ No se pudo autenticar con ninguna contraseña${NC}"
+    echo "   Respuesta con contraseña final: $test_response"
+    echo ""
+    echo "💡 Sugerencias:"
+    echo "   1. Verifica que la contraseña sea correcta"
+    echo "   2. Si es la primera vez, la contraseña debe ser 'admin'"
+    echo "   3. Si ya cambió la contraseña, verifica que sea '${SONARQUBE_FINAL_PASSWORD}'"
+    return 1
+}
+
 # Función para esperar a que SonarQube esté listo
 wait_for_sonarqube() {
     local retries=0
@@ -38,8 +126,10 @@ wait_for_sonarqube() {
     echo "⏳ Esperando a que SonarQube esté disponible en ${SONARQUBE_HOST}..."
     
     while [ $retries -lt $MAX_RETRIES ]; do
-        if curl -s -u "${SONARQUBE_USER}:${SONARQUBE_PASSWORD}" \
-            "${SONARQUBE_HOST}/api/system/status" 2>/dev/null | grep -q '"status":"UP"'; then
+        # Verificar estado del sistema (no requiere autenticación válida, solo que el servicio esté UP)
+        local status_response=$(curl -s "${SONARQUBE_HOST}/api/system/status" 2>/dev/null)
+        
+        if echo "$status_response" | grep -q '"status":"UP"'; then
             echo -e "${GREEN}✅ SonarQube está disponible${NC}"
             return 0
         fi
@@ -60,19 +150,19 @@ revoke_existing_token() {
     echo ""
     echo "🔍 Verificando si existe un token con el nombre '${token_name}'..."
     
-    # Listar tokens existentes
-    local existing_tokens=$(curl -s -u "${SONARQUBE_USER}:${SONARQUBE_PASSWORD}" \
-        "${SONARQUBE_HOST}/api/user_tokens/search?login=${SONARQUBE_USER}")
+    # Listar tokens existentes usando la contraseña detectada
+    local existing_tokens=$(curl -s -u "${SONARQUBE_USER}:${CURRENT_PASSWORD}" \
+        "${SONARQUBE_HOST}/api/user_tokens/search?login=${SONARQUBE_USER}" 2>/dev/null)
     
     # Verificar si existe el token
     if echo "$existing_tokens" | grep -q "\"name\":\"${token_name}\""; then
         echo -e "${YELLOW}⚠️  Token existente encontrado. Revocándolo...${NC}"
         
-        # Revocar el token
-        local response=$(curl -s -X POST -u "${SONARQUBE_USER}:${SONARQUBE_PASSWORD}" \
+        # Revocar el token usando la contraseña detectada
+        local response=$(curl -s -X POST -u "${SONARQUBE_USER}:${CURRENT_PASSWORD}" \
             "${SONARQUBE_HOST}/api/user_tokens/revoke" \
             -d "name=${token_name}" \
-            -d "login=${SONARQUBE_USER}")
+            -d "login=${SONARQUBE_USER}" 2>/dev/null)
         
         if echo "$response" | grep -q "errors"; then
             echo -e "${RED}❌ Error revocando token existente${NC}"
@@ -95,18 +185,61 @@ generate_token() {
     echo ""
     echo "🔑 Generando nuevo token '${token_name}'..."
     
-    local response=$(curl -s -X POST -u "${SONARQUBE_USER}:${SONARQUBE_PASSWORD}" \
+    # Usar la contraseña detectada
+    local response=$(curl -s -X POST -u "${SONARQUBE_USER}:${CURRENT_PASSWORD}" \
         "${SONARQUBE_HOST}/api/user_tokens/generate" \
         -d "name=${token_name}" \
-        -d "login=${SONARQUBE_USER}")
+        -d "login=${SONARQUBE_USER}" 2>/dev/null)
+    
+    # Verificar si la respuesta está vacía
+    if [ -z "$response" ] || [ "$response" = "" ]; then
+        echo -e "${RED}❌ Error: Respuesta vacía de SonarQube${NC}"
+        echo "   Esto puede indicar:"
+        echo "   - Error de autenticación (HTTP 401)"
+        echo "   - SonarQube no está completamente iniciado"
+        echo "   - Problema de conectividad"
+        echo ""
+        echo "   Verificando autenticación..."
+        local auth_check=$(curl -s -u "${SONARQUBE_USER}:${CURRENT_PASSWORD}" \
+            "${SONARQUBE_HOST}/api/authentication/validate" 2>/dev/null)
+        echo "   Validación de autenticación: $auth_check"
+        return 1
+    fi
+    
+    # Verificar si hay error de autenticación
+    if echo "$response" | grep -q "Unauthorized\|401"; then
+        echo -e "${RED}❌ Error de autenticación al generar token${NC}"
+        echo "   Verifica que la contraseña sea correcta"
+        echo "   Contraseña actual: ${CURRENT_PASSWORD}"
+        echo "Respuesta: $response"
+        return 1
+    fi
+    
+    # Verificar si hay errores en la respuesta JSON
+    if echo "$response" | grep -q '"errors"\|"error"'; then
+        echo -e "${RED}❌ Error en la respuesta de SonarQube${NC}"
+        echo "Respuesta: $response"
+        # Intentar extraer mensaje de error
+        local error_msg=$(echo "$response" | grep -o '"msg":"[^"]*"' | cut -d'"' -f4)
+        if [ -n "$error_msg" ]; then
+            echo "Mensaje de error: $error_msg"
+        fi
+        return 1
+    fi
     
     # Extraer el token de la respuesta
     local token=$(echo "$response" | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
     
     if [ -z "$token" ]; then
         echo -e "${RED}❌ Error generando token${NC}"
-        echo "Respuesta de SonarQube:"
-        echo "$response"
+        echo "   No se pudo extraer el token de la respuesta"
+        echo "Respuesta completa de SonarQube:"
+        echo "$response" | head -20
+        echo ""
+        echo "💡 Verifica que:"
+        echo "   1. La contraseña sea correcta"
+        echo "   2. El usuario tenga permisos para generar tokens"
+        echo "   3. SonarQube esté completamente iniciado"
         return 1
     fi
     
@@ -295,6 +428,8 @@ apply_to_jenkins() {
 echo "📋 Configuración:"
 echo "   SonarQube Host: ${SONARQUBE_HOST}"
 echo "   Usuario: ${SONARQUBE_USER}"
+echo "   Contraseña inicial: ${SONARQUBE_INITIAL_PASSWORD}"
+echo "   Contraseña final: ${SONARQUBE_FINAL_PASSWORD}"
 echo "   Nombre del token: ${TOKEN_NAME}"
 echo ""
 
@@ -306,7 +441,20 @@ if ! wait_for_sonarqube; then
     echo "Verifica que:"
     echo "  1. SonarQube esté ejecutándose"
     echo "  2. El host sea correcto: ${SONARQUBE_HOST}"
-    echo "  3. Las credenciales sean correctas"
+    echo ""
+    exit 1
+fi
+
+# Paso 1.5: Detectar y configurar contraseña correcta
+if ! detect_password; then
+    echo ""
+    echo -e "${RED}❌ Error: No se pudo determinar la contraseña correcta${NC}"
+    echo ""
+    echo "Verifica que:"
+    echo "  1. SonarQube esté completamente iniciado"
+    echo "  2. Las credenciales sean correctas"
+    echo "  3. Si es la primera vez, la contraseña debe ser 'admin'"
+    echo "  4. Si ya cambió la contraseña, debe ser '${SONARQUBE_FINAL_PASSWORD}'"
     echo ""
     exit 1
 fi

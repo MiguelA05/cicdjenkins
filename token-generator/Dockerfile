@@ -1,11 +1,16 @@
 FROM alpine:3.19
 
 # Instalar dependencias necesarias
-RUN apk add --no-cache \
+RUN apk update && apk add --no-cache \
     bash \
     curl \
     jq \
-    grep
+    grep \
+    python3
+
+# Instalar podman (opcional, para aplicar cambios a Jenkins)
+# Nota: Podman requiere más dependencias, así que lo hacemos opcional
+# Si no está disponible, el script continuará sin aplicar cambios al contenedor
 
 # Crear directorio de trabajo
 WORKDIR /app
